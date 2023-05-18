@@ -1,7 +1,7 @@
 package clfu_test
 
 import (
-	"clfu"
+	"github.com/eko234/clfu"
 	"sync"
 	"testing"
 )

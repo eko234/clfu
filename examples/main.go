@@ -1,7 +1,7 @@
 package main
 
 import (
-	"clfu"
+	"github.com/eko234/clfu"
 	"fmt"
 	"runtime"
 	"sync"
