@@ -6,10 +6,19 @@ import (
 	"testing"
 )
 
-func TestPut(t *testing.T) {
+func TestKeys(t *testing.T) {
+	lfu := clfu.NewLFUCache[string, bool](10)
+	lfu.Put("1", false, true)
+	lfu.Put("2", true, true)
+	keys := lfu.Keys()
+	if len(keys) != 2 || keys[0] != "1" || keys[1] != "2" {
+  	t.Fatalf("GOT FUCKED BRO")
+	}
+}
 
+func TestPut(t *testing.T) {
 	// create a new LFU cache with size=10
-	lfu := clfu.NewLFUCache(10)
+	lfu := clfu.NewLFUCache[int, int](10)
 
 	// insert 1000 elements with replace=false
 	for i := 1; i <= 1000; i++ {
@@ -26,7 +35,7 @@ func TestPut(t *testing.T) {
 
 	allElements := lfu.AsSlice()
 	for i := 0; i < 10; i++ {
-		value := (*(*allElements)[i].Value).(int)
+		value := (*(*allElements)[i].Value)
 		if value != (i + 991) {
 			t.Fatalf("invalid value in the cache, expected %d, but got %d", value, i+991)
 		}
@@ -34,7 +43,7 @@ func TestPut(t *testing.T) {
 }
 
 func TestPutWithReplace(t *testing.T) {
-	lfu := clfu.NewLFUCache(1)
+	lfu := clfu.NewLFUCache[int, int](1)
 
 	// insert an element
 	err := lfu.Put(1, 1, false)
@@ -54,14 +63,13 @@ func TestPutWithReplace(t *testing.T) {
 		t.Fatalf("key '1' not found")
 	}
 
-	value := (*valueRaw).(int)
+	value := *valueRaw
 	if value != 1000 {
 		t.Fatalf("expected value of replacing the key with insert was 1000 but got %d", value)
 	}
 }
 
 func TestComplexStructPutAndGet(t *testing.T) {
-
 	type SampleStructValue struct {
 		Name     string
 		Value    string
@@ -70,7 +78,7 @@ func TestComplexStructPutAndGet(t *testing.T) {
 	}
 
 	// create a new LFU cache with size=10
-	lfu := clfu.NewLFUCache(10)
+	lfu := clfu.NewLFUCache[string, SampleStructValue](10)
 
 	sampleStructValue := SampleStructValue{
 		Name:     "test",
@@ -89,7 +97,7 @@ func TestComplexStructPutAndGet(t *testing.T) {
 		t.Fatalf("key 'my-test-sample-key' not found")
 	}
 
-	value := (*valueRaw).(SampleStructValue)
+	value := (*valueRaw)
 	allGood := value.Name == "test" && value.Value == "test-xxxxx" && value.Age == 100000 && len(value.Elements) == 4
 	if !allGood {
 		t.Fatalf("improper value read from the cache")
@@ -98,7 +106,7 @@ func TestComplexStructPutAndGet(t *testing.T) {
 
 func TestManualEvict(t *testing.T) {
 	// create a new LFU cache with size=10
-	lfu := clfu.NewLFUCache(10)
+	lfu := clfu.NewLFUCache[int, int](10)
 
 	// insert 1000 elements with replace=false
 	for i := 1; i <= 1000; i++ {
@@ -131,7 +139,7 @@ func TestManualEvict(t *testing.T) {
 	// now the remaining elements from 991 to 994
 	allElements := lfu.AsSlice()
 	for i := 0; i < 5; i++ {
-		value := (*(*allElements)[i].Value).(int)
+		value := (*(*allElements)[i].Value)
 		if value != (i + 991) {
 			t.Fatalf("invalid value in the cache, expected %d, but got %d", i+991, value)
 		}
@@ -140,7 +148,7 @@ func TestManualEvict(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	// create a new LFU cache with size=10
-	lfu := clfu.NewLFUCache(10)
+	lfu := clfu.NewLFUCache[int, int](10)
 
 	// insert 1000 elements with replace=false
 	for i := 1; i <= 1000; i++ {
@@ -177,7 +185,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestLeastAndFrequentItemsGetter(t *testing.T) {
-	lfu := clfu.NewLFUCache(10)
+	lfu := clfu.NewLFUCache[int, int](10)
 
 	// insert 1000 elements with replace=false
 	for i := 1; i <= 1000; i++ {
@@ -200,7 +208,7 @@ func TestLeastAndFrequentItemsGetter(t *testing.T) {
 	// least frequency items - 996 to 1000
 	allElements := lfu.GetLeastFrequencyItems()
 	for i := 0; i < 5; i++ {
-		value := (*(*allElements)[i].Value).(int)
+		value := (*(*allElements)[i].Value)
 		if value != (i + 996) {
 			t.Fatalf("invalid value in the cache, expected %d, but got %d", i+996, value)
 		}
@@ -209,7 +217,7 @@ func TestLeastAndFrequentItemsGetter(t *testing.T) {
 	// top frequency items - 991 to 995
 	allElements = lfu.GetTopFrequencyItems()
 	for i := 0; i < 5; i++ {
-		value := (*(*allElements)[i].Value).(int)
+		value := (*(*allElements)[i].Value)
 		if value != (i + 991) {
 			t.Fatalf("invalid value in the cache, expected %d, but got %d", i+991, value)
 		}
@@ -217,7 +225,7 @@ func TestLeastAndFrequentItemsGetter(t *testing.T) {
 }
 
 func TestMaxSizeResize(t *testing.T) {
-	lfu := clfu.NewLFUCache(10)
+	lfu := clfu.NewLFUCache[int, int](10)
 
 	// insert 1000 elements with replace=false
 	for i := 1; i <= 1000; i++ {
@@ -243,9 +251,8 @@ func TestMaxSizeResize(t *testing.T) {
 }
 
 func TestConcurrentPut(t *testing.T) {
-
 	// create a cache with small size
-	lfu := clfu.NewLFUCache(1000)
+	lfu := clfu.NewLFUCache[int, int](1000)
 
 	// 4 goroutines will be inserting values 1M each
 	insertOp := func(wg *sync.WaitGroup, from int, to int) {
@@ -271,8 +278,7 @@ func TestConcurrentPut(t *testing.T) {
 }
 
 func TestConcurrentGet(t *testing.T) {
-
-	lfu := clfu.NewLFUCache(100000)
+	lfu := clfu.NewLFUCache[int, int](100000)
 
 	for i := 0; i < 10000; i++ {
 		lfu.Put(i, i, false)
@@ -307,8 +313,7 @@ func TestConcurrentGet(t *testing.T) {
 }
 
 func TestConcurrentLazyGet(t *testing.T) {
-
-	lfu := clfu.NewLazyLFUCache(100000, 1000)
+	lfu := clfu.NewLazyLFUCache[int, int](100000, 1000)
 
 	for i := 0; i < 10000; i++ {
 		lfu.Put(i, i, false)
@@ -345,7 +350,7 @@ func TestConcurrentLazyGet(t *testing.T) {
 }
 
 func BenchmarkPut(b *testing.B) {
-	lfu := clfu.NewLFUCache(1000)
+	lfu := clfu.NewLFUCache[int, int](1000)
 	// insert 10M elements
 	for i := 0; i < b.N; i++ {
 		lfu.Put(i, i, false)
@@ -353,7 +358,7 @@ func BenchmarkPut(b *testing.B) {
 }
 
 func BenchmarkConcurrentPut(b *testing.B) {
-	lfu := clfu.NewLFUCache(1000)
+	lfu := clfu.NewLFUCache[int, int](1000)
 
 	i := 0
 
@@ -367,7 +372,7 @@ func BenchmarkConcurrentPut(b *testing.B) {
 }
 
 func BenchmarkGetOperation(b *testing.B) {
-	lfu := clfu.NewLFUCache(100)
+	lfu := clfu.NewLFUCache[int, int](100)
 	for i := 0; i < 100; i++ {
 		lfu.Put(i, i, false)
 	}
@@ -378,7 +383,7 @@ func BenchmarkGetOperation(b *testing.B) {
 }
 
 func BenchmarkConcurrentGet(b *testing.B) {
-	lfu := clfu.NewLFUCache(100)
+	lfu := clfu.NewLFUCache[int, int](100)
 	for i := 0; i < 100; i++ {
 		lfu.Put(i, i, false)
 	}
@@ -395,7 +400,7 @@ func BenchmarkConcurrentGet(b *testing.B) {
 }
 
 func BenchmarkLazyLFUGet(b *testing.B) {
-	lfu := clfu.NewLazyLFUCache(100, 19)
+	lfu := clfu.NewLazyLFUCache[int, int](100, 19)
 	for i := 0; i < 100; i++ {
 		lfu.Put(i, i, false)
 	}
@@ -406,7 +411,7 @@ func BenchmarkLazyLFUGet(b *testing.B) {
 }
 
 func BenchmarkConcurrentLazyLFUGet(b *testing.B) {
-	lfu := clfu.NewLazyLFUCache(100, 100)
+	lfu := clfu.NewLazyLFUCache[int, int](100, 100)
 	for i := 0; i < 100; i++ {
 		lfu.Put(i, i, false)
 	}

@@ -6,14 +6,11 @@ import (
 	"sync"
 )
 
-type ValueType interface{}
-type KeyType interface{}
-
 // `KeyValueEntry` represents an item in the slice representation of LFU cache
-type KeyValueEntry struct {
-	Key       *KeyType   // pointer to key
-	Value     *ValueType // pointer to value
-	Frequency uint       // frequency of access
+type KeyValueEntry[K comparable, V any] struct {
+	Key       *K   // pointer to key
+	Value     *V   // pointer to value
+	Frequency uint // frequency of access
 }
 
 // `FrequencyNode` represents a node in the frequency linked list
@@ -33,22 +30,22 @@ func newFrequencyNode(count uint) *FrequencyNode {
 }
 
 // `KeyRefNode`` represents the value held on the LRU cache frequency list node
-type KeyRefNode struct {
+type KeyRefNode[K comparable, V any] struct {
 	inner          *list.Element // contains the actual value wrapped by a list element
 	parentFreqNode *list.Element // contains reference to the frequency node element
-	keyRef         *KeyType      // contains pointer to the key
-	valueRef       *ValueType    // value
+	keyRef         *K            // contains pointer to the key
+	valueRef       *V            // value
 }
 
-type LFULazyCounter struct {
-	accessList []KeyType
+type LFULazyCounter[K comparable] struct {
+	accessList []K
 	count      uint
 	capacity   uint
 }
 
 // creates a new KeyRef node which is used to represent the value in linked list
-func newKeyRefNode(keyRef *KeyType, valueRef *ValueType, parent *list.Element) *KeyRefNode {
-	return &KeyRefNode{
+func newKeyRefNode[K comparable, V any](keyRef *K, valueRef *V, parent *list.Element) *KeyRefNode[K, V] {
+	return &KeyRefNode[K, V]{
 		inner:          nil,
 		parentFreqNode: parent,
 		keyRef:         keyRef,
@@ -57,17 +54,17 @@ func newKeyRefNode(keyRef *KeyType, valueRef *ValueType, parent *list.Element) *
 }
 
 // `LFUCache` implements all the methods and data-structures required for LFU cache
-type LFUCache struct {
+type LFUCache[K comparable, V any] struct {
 	rwLock      sync.RWMutex            // rwLock is a read-write mutex which provides concurrent reads but exclusive writes
-	lookupTable map[KeyType]*KeyRefNode // a hash table of <KeyType, *ValueType> for quick reference of values based on keys
+	lookupTable map[K]*KeyRefNode[K, V] // a hash table of <KeyType, *ValueType> for quick reference of values based on keys
 	frequencies *list.List              // internal linked list that contains frequency mapping
 	maxSize     uint                    // maxSize represents the maximum number of elements that can be in the cache before eviction
 	isLazy      bool                    // if set to true, the frequency count update will happen lazily
-	lazyCounter *LFULazyCounter         // contains pointer to lazy counter instance
+	lazyCounter *LFULazyCounter[K]      // contains pointer to lazy counter instance
 }
 
 // `MaxSize` returns the maximum size of the cache at that point in time
-func (lfu *LFUCache) MaxSize() uint {
+func (lfu *LFUCache[comparable, any]) MaxSize() uint {
 	lfu.rwLock.RLock()
 	defer lfu.rwLock.RUnlock()
 
@@ -77,7 +74,7 @@ func (lfu *LFUCache) MaxSize() uint {
 // `CurrentSize` returns the number of elements in that cache
 //
 // Returns: `uint` representing the current size
-func (lfu *LFUCache) CurrentSize() uint {
+func (lfu *LFUCache[comparable, any]) CurrentSize() uint {
 	lfu.rwLock.RLock()
 	defer lfu.rwLock.RUnlock()
 
@@ -87,7 +84,7 @@ func (lfu *LFUCache) CurrentSize() uint {
 // `IsFull` checks if the LFU cache is full
 //
 // Returns (true/false), `true` if LFU cache is full, `false` if LFU cache is not full
-func (lfu *LFUCache) IsFull() bool {
+func (lfu *LFUCache[comparable, any]) IsFull() bool {
 	lfu.rwLock.RLock()
 	defer lfu.rwLock.RUnlock()
 
@@ -99,7 +96,7 @@ func (lfu *LFUCache) IsFull() bool {
 // Parameters
 //
 // 1. size: `uint` value which specifies the new size of the LFU cache
-func (lfu *LFUCache) SetMaxSize(size uint) {
+func (lfu *LFUCache[comparable, any]) SetMaxSize(size uint) {
 	lfu.rwLock.Lock()
 	defer lfu.rwLock.Unlock()
 
@@ -108,7 +105,7 @@ func (lfu *LFUCache) SetMaxSize(size uint) {
 
 // evict the least recently used element from the cache, this function is unsafe to be called externally
 // because it doesn't provide locking mechanism.
-func (lfu *LFUCache) unsafeEvict() error {
+func (lfu *LFUCache[comparable, any]) unsafeEvict() error {
 	// WARNING: This function assumes that a write lock has been held by the caller already
 
 	// get the head node of the list
@@ -128,7 +125,7 @@ func (lfu *LFUCache) unsafeEvict() error {
 	headValuesList := headFreqInner.valuesList
 	// pop the head of this this values list
 	headValueNode := headValuesList.Front()
-	removeResult := headValuesList.Remove(headValueNode).(*KeyRefNode)
+	removeResult := headValuesList.Remove(headValueNode).(*KeyRefNode[comparable, any])
 
 	// update the values list
 	headFreqInner.valuesList = headValuesList
@@ -160,7 +157,7 @@ func (lfu *LFUCache) unsafeEvict() error {
 // `false`, an `error` is thrown if `key` already exists.
 //
 // Returns: `error` if there are any errors during insertions
-func (lfu *LFUCache) Put(key KeyType, value ValueType, replace bool) error {
+func (lfu *LFUCache[comparable, any]) Put(key comparable, value any, replace bool) error {
 	// get write lock
 	lfu.rwLock.Lock()
 	defer lfu.rwLock.Unlock()
@@ -213,7 +210,7 @@ func (lfu *LFUCache) Put(key KeyType, value ValueType, replace bool) error {
 // `Evict` can be called to manually perform eviction
 //
 // Returns: `error` if there are any errors during eviction
-func (lfu *LFUCache) Evict() error {
+func (lfu *LFUCache[comparable, any]) Evict() error {
 	lfu.rwLock.Lock()
 	defer lfu.rwLock.Unlock()
 
@@ -224,7 +221,7 @@ func (lfu *LFUCache) Evict() error {
 	return lfu.unsafeEvict()
 }
 
-func (lfu *LFUCache) unsafeUpdateFrequency(valueNode *KeyRefNode) {
+func (lfu *LFUCache[comparable, any]) unsafeUpdateFrequency(valueNode *KeyRefNode[comparable, any]) {
 	parentFreqNode := valueNode.parentFreqNode
 	currentNode := parentFreqNode.Value.(*FrequencyNode)
 	nextParentFreqNode := parentFreqNode.Next()
@@ -267,7 +264,7 @@ func (lfu *LFUCache) unsafeUpdateFrequency(valueNode *KeyRefNode) {
 }
 
 // unsafeFlushLazyCounter flushes the updates in lazy counter without locking
-func (lfu *LFUCache) unsafeFlushLazyCounter() error {
+func (lfu *LFUCache[comparable, any]) unsafeFlushLazyCounter() error {
 	// WARNING: calling this function directly is not recommended, because
 	// this function assumes caller has a RWLock over the LFU cache.
 
@@ -289,7 +286,7 @@ func (lfu *LFUCache) unsafeFlushLazyCounter() error {
 // FlushLazyCounter updates the state LFU cache with pending frequency updates in lazy counter
 //
 // Returns: error if lazy update fails
-func (lfu *LFUCache) FlushLazyCounter() error {
+func (lfu *LFUCache[comparable, any]) FlushLazyCounter() error {
 	lfu.rwLock.Lock()
 	defer lfu.rwLock.Unlock()
 
@@ -303,7 +300,7 @@ func (lfu *LFUCache) FlushLazyCounter() error {
 // key: key: Key is of `KeyType` (or simply an `interface{}`) which represents the key, note that the key must be hashable type
 //
 // Returns: `(*ValueType, bool)` - returns a pointer to the value in LFU cache if `key` exists, else it will be `nil` with `error` non-nil.
-func (lfu *LFUCache) Get(key KeyType) (*ValueType, bool) {
+func (lfu *LFUCache[comparable, any]) Get(key comparable) (*any, bool) {
 	if !lfu.isLazy {
 		lfu.rwLock.Lock()
 		defer lfu.rwLock.Unlock()
@@ -350,7 +347,7 @@ func (lfu *LFUCache) Get(key KeyType) (*ValueType, bool) {
 // key: key is of type `KeyType` (or simply `interface{}`) which represents the key to be deleted
 //
 // Returns: `error` which is nil if `key` is deleted, non-nil if there are some errors while deletion
-func (lfu *LFUCache) Delete(key KeyType) error {
+func (lfu *LFUCache[comparable, any]) Delete(key comparable) error {
 	lfu.rwLock.Lock()
 	defer lfu.rwLock.Unlock()
 
@@ -373,22 +370,33 @@ func (lfu *LFUCache) Delete(key KeyType) error {
 	return nil
 }
 
+func (lfu *LFUCache[comparable, any]) Keys() []comparable {
+	lfu.rwLock.RLock()
+	defer lfu.rwLock.RUnlock()
+
+	keys := []comparable{}
+	for k := range lfu.lookupTable {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // `AsSlice` returns the list of all elements in the key lfu cache and their frequencies
 //
 // Returns: a pointer to the slice of `KeyValueEntry` type, which contains the list of elements (key, value and frequency) in the current
 // state of LFU cache.
-func (lfu *LFUCache) AsSlice() *[]KeyValueEntry {
+func (lfu *LFUCache[comparable, any]) AsSlice() *[]KeyValueEntry[comparable, any] {
 	lfu.rwLock.RLock()
 	defer lfu.rwLock.RUnlock()
 
-	valuesList := make([]KeyValueEntry, 0)
+	valuesList := make([]KeyValueEntry[comparable, any], 0)
 
 	for current := lfu.frequencies.Front(); current != nil; current = current.Next() {
 		currentNode := current.Value.(*FrequencyNode)
 		count := currentNode.count
 		for value := currentNode.valuesList.Front(); value != nil; value = value.Next() {
-			valueNode := (value.Value).(*KeyRefNode)
-			valuesList = append(valuesList, KeyValueEntry{
+			valueNode := (value.Value).(*KeyRefNode[comparable, any])
+			valuesList = append(valuesList, KeyValueEntry[comparable, any]{
 				Key:       valueNode.keyRef,
 				Value:     valueNode.valueRef,
 				Frequency: count,
@@ -403,11 +411,11 @@ func (lfu *LFUCache) AsSlice() *[]KeyValueEntry {
 //
 // Returns: a pointer to the slice of `KeyValueEntry` type, which contains the list of elements (key, value and frequency) having
 // highest frequency value in the current state of the LFU cache.
-func (lfu *LFUCache) GetTopFrequencyItems() *[]KeyValueEntry {
+func (lfu *LFUCache[comparable, any]) GetTopFrequencyItems() *[]KeyValueEntry[comparable, any] {
 	lfu.rwLock.RLock()
 	defer lfu.rwLock.RUnlock()
 
-	valuesList := make([]KeyValueEntry, 0)
+	valuesList := make([]KeyValueEntry[comparable, any], 0)
 
 	current := lfu.frequencies.Back()
 	if current == nil {
@@ -417,8 +425,8 @@ func (lfu *LFUCache) GetTopFrequencyItems() *[]KeyValueEntry {
 	currentNode := current.Value.(*FrequencyNode)
 	count := currentNode.count
 	for value := currentNode.valuesList.Front(); value != nil; value = value.Next() {
-		valueNode := (value.Value).(*KeyRefNode)
-		valuesList = append(valuesList, KeyValueEntry{
+		valueNode := (value.Value).(*KeyRefNode[comparable, any])
+		valuesList = append(valuesList, KeyValueEntry[comparable, any]{
 			Key:       valueNode.keyRef,
 			Value:     valueNode.valueRef,
 			Frequency: count,
@@ -432,11 +440,11 @@ func (lfu *LFUCache) GetTopFrequencyItems() *[]KeyValueEntry {
 //
 // Returns: a pointer to the slice of `KeyValueEntry` type, which contains the list of elements (key, value and frequency) having
 // least frequency value in the current state of the LFU cache.
-func (lfu *LFUCache) GetLeastFrequencyItems() *[]KeyValueEntry {
+func (lfu *LFUCache[comparable, any]) GetLeastFrequencyItems() *[]KeyValueEntry[comparable, any] {
 	lfu.rwLock.RLock()
 	defer lfu.rwLock.RUnlock()
 
-	valuesList := make([]KeyValueEntry, 0)
+	valuesList := make([]KeyValueEntry[comparable, any], 0)
 
 	current := lfu.frequencies.Front()
 	if current == nil {
@@ -446,8 +454,8 @@ func (lfu *LFUCache) GetLeastFrequencyItems() *[]KeyValueEntry {
 	currentNode := current.Value.(*FrequencyNode)
 	count := currentNode.count
 	for value := currentNode.valuesList.Front(); value != nil; value = value.Next() {
-		valueNode := (value.Value).(*KeyRefNode)
-		valuesList = append(valuesList, KeyValueEntry{
+		valueNode := (value.Value).(*KeyRefNode[comparable, any])
+		valuesList = append(valuesList, KeyValueEntry[comparable, any]{
 			Key:       valueNode.keyRef,
 			Value:     valueNode.valueRef,
 			Frequency: count,
@@ -464,10 +472,10 @@ func (lfu *LFUCache) GetLeastFrequencyItems() *[]KeyValueEntry {
 // 1. maxSize: `uint` representing the max size of LFU cache.
 //
 // Returns: (*LFUCache) a pointer to LFU cache instance.
-func NewLFUCache(maxSize uint) *LFUCache {
-	return &LFUCache{
+func NewLFUCache[K comparable, V any](maxSize uint) *LFUCache[K, V] {
+	return &LFUCache[K, V]{
 		rwLock:      sync.RWMutex{},
-		lookupTable: make(map[KeyType]*KeyRefNode),
+		lookupTable: make(map[K]*KeyRefNode[K, V]),
 		maxSize:     maxSize,
 		frequencies: list.New(),
 	}
@@ -481,16 +489,16 @@ func NewLFUCache(maxSize uint) *LFUCache {
 //
 // 2. lazyCounterSize: size of lazy counter to use, frequencies will be updated in batch or when some write happens or manually FlushLazyCounter is called.
 // Returns: (*LFUCache) a pointer to LFU cache instance.
-func NewLazyLFUCache(maxSize uint, lazyCounterSize uint) *LFUCache {
-	lazyCounter := LFULazyCounter{
+func NewLazyLFUCache[K comparable, V any](maxSize uint, lazyCounterSize uint) *LFUCache[K, V] {
+	lazyCounter := LFULazyCounter[K]{
 		count:      0,
 		capacity:   lazyCounterSize,
-		accessList: make([]KeyType, lazyCounterSize),
+		accessList: make([]K, lazyCounterSize),
 	}
 
-	lfuCache := &LFUCache{
+	lfuCache := &LFUCache[K, V]{
 		rwLock:      sync.RWMutex{},
-		lookupTable: make(map[KeyType]*KeyRefNode),
+		lookupTable: make(map[K]*KeyRefNode[K, V]),
 		maxSize:     maxSize,
 		frequencies: list.New(),
 		isLazy:      true,

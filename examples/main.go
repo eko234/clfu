@@ -9,7 +9,7 @@ import (
 )
 
 func normal() {
-	lfuCache := clfu.NewLFUCache(1000)
+	lfuCache := clfu.NewLFUCache[int, int](1000)
 	for i := 0; i < 1000; i++ {
 		lfuCache.Put(i, i, false)
 	}
@@ -38,7 +38,7 @@ func normal() {
 }
 
 func lazy() {
-	lfuCache := clfu.NewLazyLFUCache(1000, 1000)
+	lfuCache := clfu.NewLazyLFUCache[int, int](1000, 1000)
 	for i := 0; i < 1000; i++ {
 		lfuCache.Put(i, i, false)
 	}
@@ -74,11 +74,10 @@ func timeTaken() {
 	normal()
 
 	lazy()
-
 }
 
 func averageAccessTimeNormal() {
-	lfuCache := clfu.NewLFUCache(1000)
+	lfuCache := clfu.NewLFUCache[int, int](1000)
 	for i := 0; i < 1000; i++ {
 		lfuCache.Put(i, i, false)
 	}
@@ -110,7 +109,7 @@ func averageAccessTimeNormal() {
 }
 
 func averageAccessTimeLazy() {
-	lfuCache := clfu.NewLazyLFUCache(1000, 1000)
+	lfuCache := clfu.NewLazyLFUCache[int, int](1000, 1000)
 	for i := 0; i < 1000; i++ {
 		lfuCache.Put(i, i, false)
 	}
@@ -150,7 +149,7 @@ func averageAccessTime() {
 }
 
 func allElements() {
-	lfuCache := clfu.NewLFUCache(3)
+	lfuCache := clfu.NewLFUCache[string, int](3)
 
 	// insert some values
 	lfuCache.Put("u939801", 123, false)
@@ -161,15 +160,14 @@ func allElements() {
 	entries := lfuCache.AsSlice()
 	for _, entry := range *entries {
 		fmt.Printf("Frequency=%d\n", entry.Frequency)
-		fmt.Printf("Key=%s\n", (*entry.Key).(string))
-		fmt.Printf("Value=%d\n", (*entry.Value).(int))
+		fmt.Printf("Key=%s\n", (*entry.Key))
+		fmt.Printf("Value=%d\n", (*entry.Value))
 	}
 }
 
 func main() {
-
 	// create a new instance of LFU cache with a max size
-	lfuCache := clfu.NewLFUCache(3)
+	lfuCache := clfu.NewLFUCache[string, int](3)
 
 	// insert values, any interface{} can be used as key, value
 	lfuCache.Put("u939801", 123, false)
@@ -191,12 +189,12 @@ func main() {
 	// get values (this will increase the frequency of given key 1)
 	rawValue, found := lfuCache.Get("u939802")
 	if found {
-		fmt.Printf("Value of 'u939802' is %d\n", (*rawValue).(int))
+		fmt.Printf("Value of 'u939802' is %d\n", (*rawValue))
 	}
 
 	rawValue, found = lfuCache.Get("u939803")
 	if found {
-		fmt.Printf("Value of 'u939803' is %d\n", (*rawValue).(int))
+		fmt.Printf("Value of 'u939803' is %d\n", (*rawValue))
 	}
 
 	// insert new entry, should evict `u939801` now  because it is the least used element
